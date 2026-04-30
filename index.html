@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Pack" />
+<meta name="theme-color" content="#ffffff" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon.png" />
+<link rel="icon" href="icon.png" />
+<title>Pack</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --surface-2: #f4f4f2;
+    --border: #e7e5e0;
+    --text: #1c1c1a;
+    --text-muted: #7a7973;
+    --accent: #2f6f5e;
+    --accent-soft: #e6f0ec;
+    --danger: #b3261e;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+    --radius: 14px;
+    --radius-sm: 10px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: contain;
+  }
+  body {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .app { max-width: 720px; margin: 0 auto; padding: 16px 14px 120px; }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 4px 14px;
+  }
+  header h1 {
+    font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em;
+  }
+  .icon-btn {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    width: 38px; height: 38px; border-radius: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 18px; cursor: pointer;
+  }
+  .icon-btn:active { background: var(--surface-2); }
+  .tabs {
+    display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 10px;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 0 0 auto;
+    padding: 9px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .tab.active {
+    background: var(--text);
+    color: white;
+    border-color: var(--text);
+  }
+  .tab.add-tab {
+    color: var(--accent);
+    border-style: dashed;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-header h2 {
+    font-size: 15px; font-weight: 600; margin: 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-header .meta {
+    font-size: 12px; color: var(--text-muted); font-weight: 500;
+  }
+  .card-actions { display: flex; gap: 6px; }
+  .btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn:active { background: var(--surface-2); }
+  .btn-primary {
+    background: var(--accent); color: white; border-color: var(--accent);
+  }
+  .btn-primary:active { opacity: 0.9; }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--accent); }
+  .btn-danger { color: var(--danger); border-color: transparent; background: transparent; }
+  .btn-sm { padding: 5px 9px; font-size: 12px; }
+
+  .item-list { list-style: none; padding: 0; margin: 0; }
+  .item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 15px;
+    min-height: 44px;
+  }
+  .item:last-child { border-bottom: none; }
+  .item.dragging { opacity: 0.4; }
+  .item .check {
+    appearance: none;
+    width: 22px; height: 22px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    flex: 0 0 auto;
+    cursor: pointer;
+    position: relative;
+  }
+  .item .check:checked {
+    background: var(--accent); border-color: var(--accent);
+  }
+  .item .check:checked::after {
+    content: "";
+    position: absolute;
+    left: 6px; top: 2px;
+    width: 6px; height: 11px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .item .name { flex: 1; min-width: 0; }
+  .item .name.checked { color: var(--text-muted); text-decoration: line-through; }
+  .item .qty {
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-left: 6px;
+    flex: 0 0 auto;
+  }
+  .item .row-actions { display: flex; gap: 4px; flex: 0 0 auto; }
+  .item .row-actions button {
+    background: transparent; border: none; color: var(--text-muted);
+    width: 30px; height: 30px; border-radius: 6px; cursor: pointer;
+    font-size: 16px;
+  }
+  .item .row-actions button:active { background: var(--surface-2); }
+
+  .empty {
+    padding: 22px 14px; text-align: center; color: var(--text-muted); font-size: 14px;
+  }
+  .add-row {
+    display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--surface-2);
+  }
+  .add-row input[type="text"] {
+    flex: 1; min-width: 0;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 15px;
+    color: var(--text);
+  }
+  .add-row input.qty-input { width: 60px; text-align: center; }
+  .add-row input:focus { outline: none; border-color: var(--accent); }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(20, 20, 18, 0.5);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    width: 100%; max-width: 720px;
+    max-height: 88vh;
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
+    padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    animation: slideUp 220ms ease;
+  }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal h3 { margin: 0 0 12px; font-size: 17px; font-weight: 600; }
+  .modal label { display: block; font-size: 13px; color: var(--text-muted); margin: 10px 0 4px; }
+  .modal input[type="text"], .modal textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--text);
+  }
+  .modal textarea { min-height: 140px; resize: vertical; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+  .pick-list { list-style: none; padding: 0; margin: 8px 0 0; max-height: 50vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+  .pick-list li { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .pick-list li:last-child { border-bottom: none; }
+  .pick-list .pick-check {
+    appearance: none; width: 20px; height: 20px;
+    border: 1.5px solid var(--border); border-radius: 5px; background: var(--surface);
+    cursor: pointer; position: relative; flex: 0 0 auto;
+  }
+  .pick-list .pick-check:checked { background: var(--accent); border-color: var(--accent); }
+  .pick-list .pick-check:checked::after {
+    content: ""; position: absolute; left: 5px; top: 1px;
+    width: 6px; height: 11px; border: solid white; border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .pick-list .pick-name { flex: 1; }
+  .pick-list .pick-meta { color: var(--text-muted); font-size: 12px; }
+
+  .bag-select {
+    width: 100%; padding: 9px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface); font-size: 14px; color: var(--text);
+  }
+
+  .move-menu {
+    display: inline-block; position: relative;
+  }
+  .move-menu-list {
+    display: none; position: absolute; right: 0; top: 110%;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: var(--shadow); min-width: 160px; z-index: 50; padding: 4px;
+  }
+  .move-menu.open .move-menu-list { display: block; }
+  .move-menu-list button {
+    display: block; width: 100%; text-align: left;
+    background: transparent; border: none; padding: 9px 10px;
+    font-size: 14px; color: var(--text); border-radius: 6px; cursor: pointer;
+  }
+  .move-menu-list button:hover, .move-menu-list button:active { background: var(--surface-2); }
+
+  .progress-line {
+    height: 3px; background: var(--surface-2); border-radius: 999px; overflow: hidden;
+    margin: 8px 14px 0;
+  }
+  .progress-line span { display: block; height: 100%; background: var(--accent); transition: width 200ms ease; }
+
+  .toolbar {
+    position: sticky; bottom: 0;
+    background: linear-gradient(to top, var(--bg) 70%, rgba(250,250,249,0));
+    padding: 16px 0 calc(8px + env(safe-area-inset-bottom));
+    display: flex; gap: 8px; justify-content: center;
+    margin-top: 10px;
+  }
+  .toolbar .btn { flex: 1; max-width: 180px; }
+
+  .hint { font-size: 12px; color: var(--text-muted); padding: 4px 4px 0; }
+
+  .bag-rename {
+    background: transparent; border: none; padding: 0; font: inherit; color: inherit; cursor: text;
+    border-bottom: 1px dashed transparent;
+  }
+  .bag-rename:focus { outline: none; border-bottom-color: var(--accent); }
+
+  .stat-pill {
+    background: var(--accent-soft); color: var(--accent);
+    font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Pack</h1>
+    <div style="display:flex; gap:6px;">
+      <button class="icon-btn" id="settingsBtn" title="Backup &amp; settings" aria-label="Settings">⋯</button>
+    </div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div id="view"></div>
+
+  <div class="toolbar">
+    <button class="btn" id="exportJsonBtn">Backup</button>
+    <button class="btn" id="importJsonBtn">Restore</button>
+    <button class="btn" id="exportXlsxBtn">Excel</button>
+  </div>
+</div>
+
+<!-- Generic modal -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" id="modal"></div>
+</div>
+
+<input type="file" id="fileInput" accept="application/json" style="display:none" />
+
+<script>
+"use strict";
+
+/* ---------- Storage ---------- */
+const STORAGE_KEY = "pack.app.v1";
+
+const DEFAULT_DATA = () => ({
+  master: [
+    // sample seed; user can delete or batch add
+    { id: uid(), name: "Passport", qty: 1 },
+    { id: uid(), name: "Phone charger", qty: 1 },
+    { id: uid(), name: "Toothbrush", qty: 1 },
+    { id: uid(), name: "T-shirts", qty: 5 },
+    { id: uid(), name: "Socks", qty: 5 },
+  ],
+  trips: [],            // [{id, name, bagNames:[4], items:[{id, masterId, name, qty, bag:0..3, packed:bool}]}]
+  activeTab: "master",  // "master" or trip id
+});
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+
+let state = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_DATA();
+    const parsed = JSON.parse(raw);
+    if (!parsed.master || !parsed.trips) return DEFAULT_DATA();
+    return parsed;
+  } catch (e) {
+    console.error("load failed", e);
+    return DEFAULT_DATA();
+  }
+}
+
+function save() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    alert("Couldn't save data: " + e.message);
+  }
+}
+
+/* ---------- Helpers ---------- */
+function getActiveTrip() {
+  if (state.activeTab === "master") return null;
+  return state.trips.find(t => t.id === state.activeTab) || null;
+}
+
+function ensureBagNames(trip) {
+  if (!trip.bagNames || trip.bagNames.length !== 4) {
+    trip.bagNames = ["Bag 1", "Bag 2", "Bag 3", "Bag 4"];
+  }
+}
+
+/* ---------- Render ---------- */
+const tabsEl = document.getElementById("tabs");
+const viewEl = document.getElementById("view");
+
+function render() {
+  renderTabs();
+  if (state.activeTab === "master") {
+    renderMaster();
+  } else {
+    const trip = getActiveTrip();
+    if (!trip) {
+      state.activeTab = "master";
+      save();
+      render();
+      return;
+    }
+    renderTrip(trip);
+  }
+}
+
+function renderTabs() {
+  tabsEl.innerHTML = "";
+  const masterTab = makeTab("Master", "master");
+  tabsEl.appendChild(masterTab);
+  state.trips.forEach(trip => tabsEl.appendChild(makeTab(trip.name, trip.id)));
+  const addBtn = document.createElement("div");
+  addBtn.className = "tab add-tab";
+  addBtn.textContent = "+ Trip";
+  addBtn.onclick = openNewTripModal;
+  tabsEl.appendChild(addBtn);
+}
+
+function makeTab(label, id) {
+  const t = document.createElement("div");
+  t.className = "tab" + (state.activeTab === id ? " active" : "");
+  t.textContent = label;
+  t.onclick = () => { state.activeTab = id; save(); render(); };
+  return t;
+}
+
+function renderMaster() {
+  viewEl.innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <div class="card-header">
+      <h2>Master List <span class="stat-pill">${state.master.length} items</span></h2>
+      <div class="card-actions">
+        <button class="btn btn-sm" id="batchAddBtn">Batch add</button>
+      </div>
+    </div>
+    <ul class="item-list" id="masterList"></ul>
+    <div class="add-row">
+      <input type="text" id="newItemName" placeholder="Add item…" autocomplete="off" />
+      <input type="text" inputmode="numeric" pattern="[0-9]*" class="qty-input" id="newItemQty" placeholder="Qty" />
+      <button class="btn btn-primary" id="addItemBtn">Add</button>
+    </div>
+  `;
+  viewEl.appendChild(card);
+
+  const list = card.querySelector("#masterList");
+  if (state.master.length === 0) {
+    list.innerHTML = `<li class="empty">No items yet. Add one below or batch paste.</li>`;
+  } else {
+    state.master.forEach(item => {
+      const li = document.createElement("li");
+      li.className = "item";
+      li.innerHTML = `
+        <div class="name">${escapeHtml(item.name)}</div>
+        ${item.qty && Number(item.qty) > 1 ? `<span class="qty">×${item.qty}</span>` : ""}
+        <div class="row-actions">
+          <button title="Edit" data-act="edit">✎</button>
+          <button title="Delete" data-act="del">✕</button>
+        </div>
+      `;
+      li.querySelector('[data-act="edit"]').onclick = () => editMasterItem(item.id);
+      li.querySelector('[data-act="del"]').onclick = () => deleteMasterItem(item.id);
+      list.appendChild(li);
+    });
+  }
+
+  card.querySelector("#addItemBtn").onclick = () => {
+    const nameEl = card.querySelector("#newItemName");
+    const qtyEl = card.querySelector("#newItemQty");
+    const name = nameEl.value.trim();
+    if (!name) return;
+    const qty = parseInt(qtyEl.value, 10) || 1;
+    state.master.push({ id: uid(), name, qty });
+    save(); render();
+    setTimeout(() => document.getElementById("newItemName")?.focus(), 0);
+  };
+  card.querySelector("#newItemName").addEventListener("keydown", e => {
+    if (e.key === "Enter") card.querySelector("#addItemBtn").click();
+  });
+  card.querySelector("#batchAddBtn").onclick = openBatchAddModal;
+
+  // Add a small "create trip from master" hint card
+  const hint = document.createElement("div");
+  hint.className = "hint";
+  hint.textContent = "Tip: tap + Trip above to create a trip, then pull items in from this master list.";
+  viewEl.appendChild(hint);
+}
+
+function renderTrip(trip) {
+  ensureBagNames(trip);
+  viewEl.innerHTML = "";
+
+  // Trip header card
+  const total = trip.items.length;
+  const packed = trip.items.filter(i => i.packed).length;
+
+  const headCard = document.createElement("div");
+  headCard.className = "card";
+  headCard.innerHTML = `
+    <div class="card-header">
+      <h2>${escapeHtml(trip.name)} <span class="stat-pill">${packed}/${total} packed</span></h2>
+      <div class="card-actions">
+        <button class="btn btn-sm" id="addFromMasterBtn">+ From master</button>
+        <button class="btn btn-sm btn-danger" id="deleteTripBtn">Delete trip</button>
+      </div>
+    </div>
+    <div class="progress-line"><span style="width:${total ? (packed/total*100) : 0}%"></span></div>
+    <div style="padding: 10px 14px 14px; display:flex; gap:6px; flex-wrap:wrap;">
+      <button class="btn btn-sm" id="renameTripBtn">Rename trip</button>
+      <button class="btn btn-sm" id="quickAddBtn">Quick add item</button>
+      <button class="btn btn-sm" id="resetPackedBtn">Reset packed</button>
+    </div>
+  `;
+  viewEl.appendChild(headCard);
+
+  headCard.querySelector("#addFromMasterBtn").onclick = () => openPickFromMasterModal(trip);
+  headCard.querySelector("#deleteTripBtn").onclick = () => {
+    if (confirm(`Delete trip "${trip.name}"? This won't affect your master list.`)) {
+      state.trips = state.trips.filter(t => t.id !== trip.id);
+      state.activeTab = "master";
+      save(); render();
+    }
+  };
+  headCard.querySelector("#renameTripBtn").onclick = () => {
+    const newName = prompt("Trip name:", trip.name);
+    if (newName && newName.trim()) { trip.name = newName.trim(); save(); render(); }
+  };
+  headCard.querySelector("#quickAddBtn").onclick = () => openQuickAddTripItemModal(trip);
+  headCard.querySelector("#resetPackedBtn").onclick = () => {
+    trip.items.forEach(i => i.packed = false);
+    save(); render();
+  };
+
+  // 4 bag cards
+  for (let bagIdx = 0; bagIdx < 4; bagIdx++) {
+    const bagItems = trip.items.filter(i => i.bag === bagIdx);
+    const bagPacked = bagItems.filter(i => i.packed).length;
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-header">
+        <h2>
+          <input class="bag-rename" type="text" value="${escapeAttr(trip.bagNames[bagIdx])}" data-bag="${bagIdx}" />
+          <span class="stat-pill">${bagPacked}/${bagItems.length}</span>
+        </h2>
+        <div class="card-actions">
+          <button class="btn btn-sm" data-act="add-to-bag" data-bag="${bagIdx}">+ Item</button>
+        </div>
+      </div>
+      <ul class="item-list"></ul>
+    `;
+    const ul = card.querySelector("ul");
+    if (bagItems.length === 0) {
+      ul.innerHTML = `<li class="empty">Empty</li>`;
+    } else {
+      bagItems.forEach(item => ul.appendChild(makeTripItemRow(trip, item)));
+    }
+    // Bag rename
+    const renameEl = card.querySelector(".bag-rename");
+    renameEl.addEventListener("change", () => {
+      const v = renameEl.value.trim() || `Bag ${bagIdx+1}`;
+      trip.bagNames[bagIdx] = v;
+      save();
+    });
+    renameEl.addEventListener("blur", () => {
+      const v = renameEl.value.trim() || `Bag ${bagIdx+1}`;
+      trip.bagNames[bagIdx] = v;
+      save();
+    });
+    // Add directly to this bag
+    card.querySelector('[data-act="add-to-bag"]').onclick = () => openPickFromMasterModal(trip, bagIdx);
+    viewEl.appendChild(card);
+  }
+}
+
+function makeTripItemRow(trip, item) {
+  const li = document.createElement("li");
+  li.className = "item";
+  const bagOptions = trip.bagNames.map((n, i) =>
+    `<button data-mv="${i}">${escapeHtml(n)}${i === item.bag ? " ✓" : ""}</button>`
+  ).join("");
+  li.innerHTML = `
+    <input class="check" type="checkbox" ${item.packed ? "checked" : ""} />
+    <div class="name ${item.packed ? "checked" : ""}">${escapeHtml(item.name)}</div>
+    ${item.qty && Number(item.qty) > 1 ? `<span class="qty">×${item.qty}</span>` : ""}
+    <div class="row-actions">
+      <div class="move-menu">
+        <button title="Move to bag" data-act="move">⇄</button>
+        <div class="move-menu-list">${bagOptions}</div>
+      </div>
+      <button title="Remove from trip" data-act="del">✕</button>
+    </div>
+  `;
+  const check = li.querySelector(".check");
+  check.onchange = () => {
+    item.packed = check.checked;
+    save(); render();
+  };
+  li.querySelector('[data-act="del"]').onclick = () => {
+    if (confirm("Remove from this trip? (master list is unaffected)")) {
+      trip.items = trip.items.filter(x => x.id !== item.id);
+      save(); render();
+    }
+  };
+  const moveMenu = li.querySelector(".move-menu");
+  li.querySelector('[data-act="move"]').onclick = (e) => {
+    e.stopPropagation();
+    document.querySelectorAll(".move-menu.open").forEach(m => { if (m !== moveMenu) m.classList.remove("open"); });
+    moveMenu.classList.toggle("open");
+  };
+  li.querySelectorAll('[data-mv]').forEach(b => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      item.bag = parseInt(b.dataset.mv, 10);
+      save(); render();
+    };
+  });
+  return li;
+}
+
+document.addEventListener("click", () => {
+  document.querySelectorAll(".move-menu.open").forEach(m => m.classList.remove("open"));
+});
+
+/* ---------- Master item ops ---------- */
+function deleteMasterItem(id) {
+  if (!confirm("Delete from master list? (existing trips keep their copy)")) return;
+  state.master = state.master.filter(i => i.id !== id);
+  save(); render();
+}
+function editMasterItem(id) {
+  const item = state.master.find(i => i.id === id);
+  if (!item) return;
+  const newName = prompt("Item name:", item.name);
+  if (newName === null) return;
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+  const newQty = prompt("Quantity:", String(item.qty || 1));
+  if (newQty === null) return;
+  item.name = trimmed;
+  item.qty = parseInt(newQty, 10) || 1;
+  save(); render();
+}
+
+/* ---------- Modals ---------- */
+const backdrop = document.getElementById("modalBackdrop");
+const modal = document.getElementById("modal");
+
+function openModal(html) {
+  modal.innerHTML = html;
+  backdrop.classList.add("show");
+}
+function closeModal() {
+  backdrop.classList.remove("show");
+  modal.innerHTML = "";
+}
+backdrop.addEventListener("click", e => { if (e.target === backdrop) closeModal(); });
+
+function openNewTripModal() {
+  openModal(`
+    <h3>New trip</h3>
+    <label>Trip name</label>
+    <input type="text" id="tripName" placeholder="e.g. Tokyo, Aug 2026" />
+    <label>Bag names (optional, you can rename later)</label>
+    <input type="text" id="bag0" placeholder="Bag 1" />
+    <input type="text" id="bag1" placeholder="Bag 2" style="margin-top:6px" />
+    <input type="text" id="bag2" placeholder="Bag 3" style="margin-top:6px" />
+    <input type="text" id="bag3" placeholder="Bag 4" style="margin-top:6px" />
+    <div class="modal-actions">
+      <button class="btn" id="cancel">Cancel</button>
+      <button class="btn btn-primary" id="create">Create</button>
+    </div>
+  `);
+  document.getElementById("tripName").focus();
+  document.getElementById("cancel").onclick = closeModal;
+  document.getElementById("create").onclick = () => {
+    const name = document.getElementById("tripName").value.trim();
+    if (!name) { alert("Please enter a trip name."); return; }
+    const trip = {
+      id: uid(),
+      name,
+      bagNames: [
+        document.getElementById("bag0").value.trim() || "Bag 1",
+        document.getElementById("bag1").value.trim() || "Bag 2",
+        document.getElementById("bag2").value.trim() || "Bag 3",
+        document.getElementById("bag3").value.trim() || "Bag 4",
+      ],
+      items: [],
+    };
+    state.trips.push(trip);
+    state.activeTab = trip.id;
+    save(); closeModal(); render();
+  };
+}
+
+function openBatchAddModal() {
+  openModal(`
+    <h3>Batch add to master</h3>
+    <p style="margin:0 0 8px; color:var(--text-muted); font-size:13px;">
+      One item per line. Optionally add a quantity after a comma or "x":
+      <br/><code>Socks, 5</code> &nbsp; or &nbsp; <code>Socks x5</code>
+    </p>
+    <textarea id="batchText" placeholder="Passport
+Sunscreen
+Socks, 5
+Underwear x7"></textarea>
+    <div class="modal-actions">
+      <button class="btn" id="cancel">Cancel</button>
+      <button class="btn btn-primary" id="add">Add</button>
+    </div>
+  `);
+  document.getElementById("batchText").focus();
+  document.getElementById("cancel").onclick = closeModal;
+  document.getElementById("add").onclick = () => {
+    const text = document.getElementById("batchText").value;
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    let added = 0;
+    lines.forEach(line => {
+      let name = line, qty = 1;
+      // try "name, qty"
+      let m = line.match(/^(.*?)[,;\t]\s*(\d+)\s*$/);
+      if (m) { name = m[1].trim(); qty = parseInt(m[2], 10) || 1; }
+      else {
+        // try "name x5" or "name × 5"
+        m = line.match(/^(.*?)\s*[x×]\s*(\d+)\s*$/i);
+        if (m) { name = m[1].trim(); qty = parseInt(m[2], 10) || 1; }
+      }
+      if (!name) return;
+      state.master.push({ id: uid(), name, qty });
+      added++;
+    });
+    save(); closeModal(); render();
+    if (added === 0) alert("No items added.");
+  };
+}
+
+function openPickFromMasterModal(trip, defaultBag = 0) {
+  if (state.master.length === 0) {
+    alert("Your master list is empty. Add items there first.");
+    return;
+  }
+  openModal(`
+    <h3>Add from master to ${escapeHtml(trip.name)}</h3>
+    <label>Place into bag</label>
+    <select class="bag-select" id="bagSel">
+      ${trip.bagNames.map((n,i) => `<option value="${i}" ${i===defaultBag?"selected":""}>${escapeHtml(n)}</option>`).join("")}
+    </select>
+    <ul class="pick-list" id="pickList">
+      ${state.master.map(m => `
+        <li>
+          <input type="checkbox" class="pick-check" data-id="${m.id}" />
+          <div class="pick-name">${escapeHtml(m.name)}</div>
+          <div class="pick-meta">${m.qty && m.qty > 1 ? "×"+m.qty : ""}</div>
+        </li>
+      `).join("")}
+    </ul>
+    <div class="modal-actions">
+      <button class="btn" id="cancel">Cancel</button>
+      <button class="btn btn-ghost btn-sm" id="selectAll">Select all</button>
+      <button class="btn btn-primary" id="addSel">Add selected</button>
+    </div>
+  `);
+  document.getElementById("cancel").onclick = closeModal;
+  document.getElementById("selectAll").onclick = () => {
+    document.querySelectorAll("#pickList .pick-check").forEach(c => c.checked = true);
+  };
+  document.getElementById("addSel").onclick = () => {
+    const bag = parseInt(document.getElementById("bagSel").value, 10) || 0;
+    const ids = Array.from(document.querySelectorAll("#pickList .pick-check:checked")).map(c => c.dataset.id);
+    if (ids.length === 0) { closeModal(); return; }
+    let added = 0;
+    ids.forEach(mid => {
+      const m = state.master.find(x => x.id === mid);
+      if (!m) return;
+      // skip duplicates already in this trip from same master id
+      if (trip.items.some(x => x.masterId === mid)) return;
+      trip.items.push({
+        id: uid(), masterId: mid, name: m.name, qty: m.qty || 1, bag, packed: false
+      });
+      added++;
+    });
+    save(); closeModal(); render();
+    if (added === 0) alert("Those items are already in this trip.");
+  };
+}
+
+function openQuickAddTripItemModal(trip) {
+  openModal(`
+    <h3>Add a one-off item to ${escapeHtml(trip.name)}</h3>
+    <p style="margin:0 0 8px; color:var(--text-muted); font-size:13px;">
+      For trip-only items not in your master list.
+    </p>
+    <label>Name</label>
+    <input type="text" id="qaName" />
+    <label>Quantity</label>
+    <input type="text" inputmode="numeric" id="qaQty" value="1" />
+    <label>Bag</label>
+    <select class="bag-select" id="qaBag">
+      ${trip.bagNames.map((n,i) => `<option value="${i}">${escapeHtml(n)}</option>`).join("")}
+    </select>
+    <label style="margin-top:10px"><input type="checkbox" id="qaAlsoMaster" /> Also add to master list</label>
+    <div class="modal-actions">
+      <button class="btn" id="cancel">Cancel</button>
+      <button class="btn btn-primary" id="add">Add</button>
+    </div>
+  `);
+  document.getElementById("qaName").focus();
+  document.getElementById("cancel").onclick = closeModal;
+  document.getElementById("add").onclick = () => {
+    const name = document.getElementById("qaName").value.trim();
+    if (!name) return;
+    const qty = parseInt(document.getElementById("qaQty").value, 10) || 1;
+    const bag = parseInt(document.getElementById("qaBag").value, 10) || 0;
+    let masterId = null;
+    if (document.getElementById("qaAlsoMaster").checked) {
+      const m = { id: uid(), name, qty };
+      state.master.push(m);
+      masterId = m.id;
+    }
+    trip.items.push({ id: uid(), masterId, name, qty, bag, packed: false });
+    save(); closeModal(); render();
+  };
+}
+
+/* ---------- Settings menu ---------- */
+document.getElementById("settingsBtn").onclick = () => {
+  openModal(`
+    <h3>Backup &amp; settings</h3>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+      <button class="btn" id="sExport">Export backup (.json)</button>
+      <button class="btn" id="sImport">Import backup (.json)</button>
+      <button class="btn" id="sExcel">Export to Excel (.xlsx)</button>
+      <button class="btn btn-danger" id="sWipe" style="margin-top:14px">Erase all data</button>
+    </div>
+    <p style="margin-top:14px; color:var(--text-muted); font-size:12px;">
+      Data is stored only on this device (in your browser). To move to a new phone,
+      export the backup, AirDrop or email it to yourself, then import it on the new phone.
+    </p>
+    <div class="modal-actions">
+      <button class="btn" id="cancel">Close</button>
+    </div>
+  `);
+  document.getElementById("cancel").onclick = closeModal;
+  document.getElementById("sExport").onclick = () => { closeModal(); exportJson(); };
+  document.getElementById("sImport").onclick = () => { closeModal(); document.getElementById("fileInput").click(); };
+  document.getElementById("sExcel").onclick = () => { closeModal(); exportXlsx(); };
+  document.getElementById("sWipe").onclick = () => {
+    if (confirm("Erase ALL data on this device? This cannot be undone.")) {
+      localStorage.removeItem(STORAGE_KEY);
+      state = DEFAULT_DATA();
+      save(); closeModal(); render();
+    }
+  };
+};
+
+/* ---------- Toolbar shortcuts ---------- */
+document.getElementById("exportJsonBtn").onclick = exportJson;
+document.getElementById("importJsonBtn").onclick = () => document.getElementById("fileInput").click();
+document.getElementById("exportXlsxBtn").onclick = exportXlsx;
+
+document.getElementById("fileInput").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data.master || !data.trips) throw new Error("Not a valid Pack backup file.");
+      if (!confirm("This will REPLACE all data on this device with the contents of the backup. Continue?")) {
+        e.target.value = ""; return;
+      }
+      state = data;
+      if (!state.activeTab) state.activeTab = "master";
+      save(); render();
+      alert("Backup restored.");
+    } catch (err) {
+      alert("Could not import: " + err.message);
+    }
+    e.target.value = "";
+  };
+  reader.readAsText(file);
+});
+
+/* ---------- Export ---------- */
+function exportJson() {
+  const data = JSON.stringify(state, null, 2);
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `pack-backup-${stamp}.json`;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+
+function exportXlsx() {
+  if (typeof XLSX === "undefined") {
+    alert("Excel library didn't load (need internet on first export).");
+    return;
+  }
+  const wb = XLSX.utils.book_new();
+
+  // Master sheet
+  const masterRows = [["Item", "Quantity"]];
+  state.master.forEach(m => masterRows.push([m.name, m.qty || 1]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(masterRows), "Master");
+
+  // One sheet per trip
+  state.trips.forEach(trip => {
+    ensureBagNames(trip);
+    const rows = [["Bag", "Item", "Quantity", "Packed"]];
+    for (let b = 0; b < 4; b++) {
+      const bagItems = trip.items.filter(i => i.bag === b);
+      bagItems.forEach(it => {
+        rows.push([trip.bagNames[b], it.name, it.qty || 1, it.packed ? "Yes" : "No"]);
+      });
+      if (bagItems.length === 0) {
+        rows.push([trip.bagNames[b], "(empty)", "", ""]);
+      }
+    }
+    const sheetName = sanitizeSheetName(trip.name);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), sheetName);
+  });
+
+  const stamp = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `pack-${stamp}.xlsx`);
+}
+
+function sanitizeSheetName(n) {
+  let s = (n || "Trip").replace(/[\\\/\?\*\[\]:]/g, " ").trim();
+  if (s.length > 31) s = s.slice(0, 31);
+  return s || "Trip";
+}
+
+/* ---------- Utils ---------- */
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+  })[c]);
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+/* ---------- Boot ---------- */
+render();
+
+/* Register service worker if you ever add one (optional) */
+// if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
