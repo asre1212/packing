@@ -252,21 +252,15 @@
     border: 1px solid var(--border); background: var(--surface); font-size: 14px; color: var(--text);
   }
 
-  .move-menu {
-    display: inline-block; position: relative;
+  .bag-picker-list { list-style: none; padding: 0; margin: 8px 0 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .bag-picker-list li {
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 15px;
   }
-  .move-menu-list {
-    display: none; position: absolute; right: 0; top: 110%;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    box-shadow: var(--shadow); min-width: 160px; z-index: 50; padding: 4px;
-  }
-  .move-menu.open .move-menu-list { display: block; }
-  .move-menu-list button {
-    display: block; width: 100%; text-align: left;
-    background: transparent; border: none; padding: 9px 10px;
-    font-size: 14px; color: var(--text); border-radius: 6px; cursor: pointer;
-  }
-  .move-menu-list button:hover, .move-menu-list button:active { background: var(--surface-2); }
+  .bag-picker-list li:last-child { border-bottom: none; }
+  .bag-picker-list li:active { background: var(--surface-2); }
+  .bag-picker-list li.current { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .bag-picker-list li .check-mark { margin-left: auto; color: var(--accent); }
 
   .progress-line {
     height: 3px; background: var(--surface-2); border-radius: 999px; overflow: hidden;
@@ -377,7 +371,7 @@ function getActiveTrip() {
 }
 
 function ensureBagNames(trip) {
-  if (!trip.bagNames || trip.bagNames.length !== 4) {
+  if (!Array.isArray(trip.bagNames) || trip.bagNames.length === 0) {
     trip.bagNames = ["Bag 1", "Bag 2", "Bag 3", "Bag 4"];
   }
 }
@@ -530,8 +524,8 @@ function renderTrip(trip) {
     save(); render();
   };
 
-  // 4 bag cards
-  for (let bagIdx = 0; bagIdx < 4; bagIdx++) {
+  // Bag cards (variable count)
+  for (let bagIdx = 0; bagIdx < trip.bagNames.length; bagIdx++) {
     const bagItems = trip.items.filter(i => i.bag === bagIdx);
     const bagPacked = bagItems.filter(i => i.packed).length;
 
@@ -545,6 +539,7 @@ function renderTrip(trip) {
         </h2>
         <div class="card-actions">
           <button class="btn btn-sm" data-act="add-to-bag" data-bag="${bagIdx}">+ Item</button>
+          <button class="btn btn-sm btn-danger" data-act="del-bag" data-bag="${bagIdx}" title="Delete bag">✕</button>
         </div>
       </div>
       <ul class="item-list"></ul>
@@ -557,37 +552,94 @@ function renderTrip(trip) {
     }
     // Bag rename
     const renameEl = card.querySelector(".bag-rename");
-    renameEl.addEventListener("change", () => {
+    const persistRename = () => {
       const v = renameEl.value.trim() || `Bag ${bagIdx+1}`;
       trip.bagNames[bagIdx] = v;
       save();
-    });
-    renameEl.addEventListener("blur", () => {
-      const v = renameEl.value.trim() || `Bag ${bagIdx+1}`;
-      trip.bagNames[bagIdx] = v;
-      save();
-    });
+    };
+    renameEl.addEventListener("change", persistRename);
+    renameEl.addEventListener("blur", persistRename);
     // Add directly to this bag
     card.querySelector('[data-act="add-to-bag"]').onclick = () => openPickFromMasterModal(trip, bagIdx);
+    // Delete bag
+    card.querySelector('[data-act="del-bag"]').onclick = () => deleteBag(trip, bagIdx);
     viewEl.appendChild(card);
   }
+
+  // "Add bag" footer button
+  const addBagWrap = document.createElement("div");
+  addBagWrap.style.cssText = "display:flex; justify-content:center; margin: 4px 0 8px;";
+  addBagWrap.innerHTML = `<button class="btn" id="addBagBtn">+ Add bag</button>`;
+  addBagWrap.querySelector("#addBagBtn").onclick = () => {
+    const name = prompt("Bag name:", `Bag ${trip.bagNames.length + 1}`);
+    if (name === null) return;
+    trip.bagNames.push(name.trim() || `Bag ${trip.bagNames.length + 1}`);
+    save(); render();
+  };
+  viewEl.appendChild(addBagWrap);
+}
+
+function deleteBag(trip, bagIdx) {
+  if (trip.bagNames.length <= 1) {
+    alert("Each trip needs at least one bag.");
+    return;
+  }
+  const itemsInBag = trip.items.filter(i => i.bag === bagIdx);
+  const bagName = trip.bagNames[bagIdx];
+
+  if (itemsInBag.length === 0) {
+    if (!confirm(`Delete bag "${bagName}"?`)) return;
+    finalizeBagDeletion(trip, bagIdx);
+    return;
+  }
+
+  // Bag has items — ask where to move them (or delete)
+  const otherBags = trip.bagNames.map((n, i) => ({ n, i })).filter(b => b.i !== bagIdx);
+  const optionsHtml = otherBags.map(b => `<option value="${b.i}">${escapeHtml(b.n)}</option>`).join("");
+  openModal(`
+    <h3>Delete bag "${escapeHtml(bagName)}"</h3>
+    <p style="margin:0 0 8px; color:var(--text-muted); font-size:13px;">
+      This bag has ${itemsInBag.length} item${itemsInBag.length === 1 ? "" : "s"}. Where should they go?
+    </p>
+    <label>Move items to</label>
+    <select class="bag-select" id="moveTo">${optionsHtml}</select>
+    <div class="modal-actions">
+      <button class="btn" id="cancel">Cancel</button>
+      <button class="btn btn-danger" id="deleteAll">Delete bag &amp; items</button>
+      <button class="btn btn-primary" id="moveAndDelete">Move &amp; delete bag</button>
+    </div>
+  `);
+  document.getElementById("cancel").onclick = closeModal;
+  document.getElementById("deleteAll").onclick = () => {
+    if (!confirm(`Permanently delete ${itemsInBag.length} item(s) along with bag "${bagName}"?`)) return;
+    trip.items = trip.items.filter(i => i.bag !== bagIdx);
+    finalizeBagDeletion(trip, bagIdx);
+    closeModal();
+  };
+  document.getElementById("moveAndDelete").onclick = () => {
+    const target = parseInt(document.getElementById("moveTo").value, 10);
+    trip.items.forEach(i => { if (i.bag === bagIdx) i.bag = target; });
+    finalizeBagDeletion(trip, bagIdx);
+    closeModal();
+  };
+}
+
+function finalizeBagDeletion(trip, bagIdx) {
+  trip.bagNames.splice(bagIdx, 1);
+  // Reindex any item.bag values above the removed index
+  trip.items.forEach(i => { if (i.bag > bagIdx) i.bag -= 1; });
+  save(); render();
 }
 
 function makeTripItemRow(trip, item) {
   const li = document.createElement("li");
   li.className = "item";
-  const bagOptions = trip.bagNames.map((n, i) =>
-    `<button data-mv="${i}">${escapeHtml(n)}${i === item.bag ? " ✓" : ""}</button>`
-  ).join("");
   li.innerHTML = `
     <input class="check" type="checkbox" ${item.packed ? "checked" : ""} />
     <div class="name ${item.packed ? "checked" : ""}">${escapeHtml(item.name)}</div>
     ${item.qty && Number(item.qty) > 1 ? `<span class="qty">×${item.qty}</span>` : ""}
     <div class="row-actions">
-      <div class="move-menu">
-        <button title="Move to bag" data-act="move">⇄</button>
-        <div class="move-menu-list">${bagOptions}</div>
-      </div>
+      <button title="Move to bag" data-act="move">⇄</button>
       <button title="Remove from trip" data-act="del">✕</button>
     </div>
   `;
@@ -602,25 +654,32 @@ function makeTripItemRow(trip, item) {
       save(); render();
     }
   };
-  const moveMenu = li.querySelector(".move-menu");
-  li.querySelector('[data-act="move"]').onclick = (e) => {
-    e.stopPropagation();
-    document.querySelectorAll(".move-menu.open").forEach(m => { if (m !== moveMenu) m.classList.remove("open"); });
-    moveMenu.classList.toggle("open");
-  };
-  li.querySelectorAll('[data-mv]').forEach(b => {
-    b.onclick = (e) => {
-      e.stopPropagation();
-      item.bag = parseInt(b.dataset.mv, 10);
-      save(); render();
-    };
-  });
+  li.querySelector('[data-act="move"]').onclick = () => openMoveBagModal(trip, item);
   return li;
 }
 
-document.addEventListener("click", () => {
-  document.querySelectorAll(".move-menu.open").forEach(m => m.classList.remove("open"));
-});
+function openMoveBagModal(trip, item) {
+  const itemsHtml = trip.bagNames.map((n, i) => `
+    <li class="${i === item.bag ? "current" : ""}" data-bag="${i}">
+      <span>${escapeHtml(n)}</span>
+      ${i === item.bag ? `<span class="check-mark">✓</span>` : ""}
+    </li>
+  `).join("");
+  openModal(`
+    <h3>Move "${escapeHtml(item.name)}" to…</h3>
+    <ul class="bag-picker-list">${itemsHtml}</ul>
+    <div class="modal-actions">
+      <button class="btn" id="cancel">Cancel</button>
+    </div>
+  `);
+  document.getElementById("cancel").onclick = closeModal;
+  document.querySelectorAll(".bag-picker-list li").forEach(el => {
+    el.onclick = () => {
+      item.bag = parseInt(el.dataset.bag, 10);
+      save(); closeModal(); render();
+    };
+  });
+}
 
 /* ---------- Master item ops ---------- */
 function deleteMasterItem(id) {
@@ -909,7 +968,7 @@ function exportXlsx() {
   state.trips.forEach(trip => {
     ensureBagNames(trip);
     const rows = [["Bag", "Item", "Quantity", "Packed"]];
-    for (let b = 0; b < 4; b++) {
+    for (let b = 0; b < trip.bagNames.length; b++) {
       const bagItems = trip.items.filter(i => i.bag === b);
       bagItems.forEach(it => {
         rows.push([trip.bagNames[b], it.name, it.qty || 1, it.packed ? "Yes" : "No"]);
